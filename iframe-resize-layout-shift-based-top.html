@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Layout Shift 테스트</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #e7f6e7;
+            border: 1px solid #2e7d32;
+            color: #1b5e20;
+        }
+        .error {
+            background-color: #ffebee;
+            border: 1px solid #c62828;
+            color: #b71c1c;
+        }
+        iframe {
+            width: 100%;
+            border: 1px solid #ccc;
+            margin: 20px 0;
+            /* transition: height 0.3s ease; */
+        }
+        #sizeInfo {
+            font-family: monospace;
+            margin-top: 10px;
+        }
+        #heightLog {
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Layout Shift 테스트</h1>
+    
+    <div id="mainResult" class="result">
+        메인 페이지의 PerformanceObserver 지원 여부를 확인중...</div>
+    
+    <h2>iframe 콘텐츠:</h2>
+    <iframe id="testFrame" src="/playground_iframe.cm"></iframe>
+
+    <div id="iframeStatus" class="result">iframe의 결과를 기다리는 중...</div>
+    <div id="shiftLog" class="result">Layout Shift 로그:</div>
+    <div id="sizeInfo" class="result">iframe 크기 정보: </div>
+    <div id="heightLog" class="result">높이 변경 로그:</div>
+
+    <script>
+        const iframe = document.getElementById('testFrame');
+        const sizeInfo = document.getElementById('sizeInfo');
+        const heightLog = document.getElementById('heightLog');
+        let lastHeight = 0;
+
+        // iframe 크기 조절 함수
+        function adjustIframeSize(height, timestamp) {
+            if (height !== lastHeight) {
+                const time = new Date(timestamp).toLocaleTimeString();
+                const diff = height - lastHeight;
+                const diffText = diff > 0 ? `+${diff}` : diff;
+                const logEntry = `${time} - 높이 변경: ${height}px (변화량: ${diffText}px)`;
+                
+                heightLog.innerHTML = logEntry + '<br>' + heightLog.innerHTML;
+                lastHeight = height;
+            }
+            
+            iframe.style.height = `${height}px`;
+            sizeInfo.textContent = `iframe 크기: ${iframe.offsetWidth}x${height}px`;
+        }
+
+        // 초기 크기 설정
+        adjustIframeSize(400);
+
+        // 메인 페이지 PerformanceObserver 체크
+        try {
+            if (typeof PerformanceObserver === 'function') {
+                const mainResult = document.getElementById('mainResult');
+                mainResult.textContent = '메인 페이지에서 PerformanceObserver가 지원됩니다.';
+                mainResult.className = 'result success';
+            } else {
+                throw new Error('PerformanceObserver not supported');
+            }
+        } catch (e) {
+            const mainResult = document.getElementById('mainResult');
+            mainResult.textContent = '메인 페이지에서 PerformanceObserver가 지원되지 않습니다.';
+            mainResult.className = 'result error';
+        }
+
+        // iframe으로부터의 메시지 수신
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'performanceCheck') {
+                const iframeStatus = document.getElementById('iframeStatus');
+                if (event.data.supported) {
+                    iframeStatus.textContent = 'iframe에서 PerformanceObserver가 정상적으로 지원됩니다.';
+                    iframeStatus.className = 'result success';
+                } else {
+                    iframeStatus.textContent = 
+                        `iframe에서 PerformanceObserver가 지원되지 않습니다. (${event.data.error || '알 수 없는 오류'})`;
+                    iframeStatus.className = 'result error';
+                }
+            } else if (event.data.type === 'layoutShift') {
+                const shiftLog = document.getElementById('shiftLog');
+                const time = new Date().toLocaleTimeString();
+                shiftLog.innerHTML = `Layout Shift 발생: ${event.data.value.toFixed(4)} (${time})<br>` + shiftLog.innerHTML;
+            } else if (event.data.type === 'resize') {
+                // iframe 내부 문서 크기 변경 감지 및 반영
+				// debugger;
+                adjustIframeSize(event.data.height, event.data.timestamp);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Layout Shift 테스트</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 20px;
+			overflow-x: hidden;
+		}
+
+		.shifting-element {
+			position: relative;
+			padding: 20px;
+			background: #f0f0f0;
+			border: 1px solid #ccc;
+			margin: 10px;
+			transition: all 0.3s ease;
+		}
+
+		.content-block {
+			margin: 10px;
+			padding: 15px;
+			background: #fff;
+			border: 1px solid #ddd;
+		}
+	</style>
+</head>
+
+<body>
+	<div id='iframeResult'></div>
+	<div id='shiftingContainer'>
+		<div class='content-block'>
+			콘텐츠 블록 1
+		</div>
+		<div class='shifting-element' id='shifter1'>
+			이동하는 요소 1
+		</div>
+		<div class='content-block'>
+			콘텐츠 블록 2
+		</div>
+		<div class='shifting-element' id='shifter2'>
+			이동하는 요소 2
+		</div>
+		<div class='content-block'>
+			콘텐츠 블록 3
+		</div>
+	</div>
+	<script>
+		// 문서 크기 변경 감지 및 부모에게 알림
+		function reportSize() {
+			const height = document.body.scrollHeight;
+			const width = document.body.scrollWidth;
+			window.parent.postMessage({
+				type: 'resize',
+				height: height,
+				width: width,
+				timestamp: new Date().getTime()
+			}, '*');
+		}
+
+		// 초기 크기 보고
+		reportSize();
+
+		// DOM 변경 감지
+		const observer = new MutationObserver(reportSize);
+		observer.observe(document.body, {
+			attributes: true,
+			childList: true,
+			subtree: true
+		});
+
+		// PerformanceObserver 설정
+		try {
+			if (typeof PerformanceObserver === 'function') {
+				document.getElementById('iframeResult').innerHTML =
+					'iframe 내부에서 PerformanceObserver가 지원됩니다.';
+				document.getElementById('iframeResult').style.color = 'green';
+
+				const perfObserver = new PerformanceObserver((list) => {
+					list.getEntries().forEach((entry) => {
+						if (entry.entryType === 'layout-shift') {
+							// window.parent.postMessage({
+							// 	type: 'layoutShift',
+							// 	value: entry.value,
+							// 	timestamp: entry.startTime
+							// }, '*');
+							// Layout Shift 발생 시 크기 다시 보고
+							reportSize();
+						}
+					});
+				});
+
+				perfObserver.observe({
+					entryTypes: ['layout-shift']
+				});
+
+				window.parent.postMessage({
+					type: 'performanceCheck',
+					supported: true
+				}, '*');
+			} else {
+				throw new Error('PerformanceObserver not supported');
+			}
+		} catch (e) {
+			document.getElementById('iframeResult').innerHTML =
+				'iframe 내부에서 PerformanceObserver가 지원되지 않습니다.';
+			document.getElementById('iframeResult').style.color = 'red';
+			window.parent.postMessage({
+				type: 'performanceCheck',
+				supported: false,
+				error: e.message
+			}, '*');
+		}
+
+		// 랜덤 Layout Shift 발생
+		function createRandomShift() {
+			const shifters = ['shifter1', 'shifter2'];
+			const randomShifter = shifters[Math.floor(Math.random() * shifters.length)];
+			const element = document.getElementById(randomShifter);
+
+			const transforms = [{
+					transform: 'translateY(50px)',
+					height: '100px'
+				},
+				{
+					transform: 'translateY(-30px)',
+					height: '80px'
+				},
+				{
+					transform: 'translateX(30px)',
+					width: '90%'
+				},
+				{
+					transform: 'translateX(-20px)',
+					width: '95%'
+				},
+				{
+					transform: 'scale(1.1)',
+					margin: '20px'
+				},
+				{
+					transform: 'scale(0.9)',
+					margin: '5px'
+				}
+			];
+
+			const randomTransform = transforms[Math.floor(Math.random() * transforms.length)];
+
+			Object.assign(element.style, {
+				transform: randomTransform.transform,
+				height: randomTransform.height || 'auto',
+				width: randomTransform.width || 'auto',
+				margin: randomTransform.margin || '10px'
+			});
+
+			setTimeout(() => {
+				element.style.transform = 'none';
+				element.style.height = 'auto';
+				element.style.width = 'auto';
+				element.style.margin = '10px';
+				reportSize(); // 원래 상태로 돌아온 후 크기 보고
+			}, 500);
+		}
+
+		setInterval(createRandomShift, 1000);
+	</script>
+</body>
+
+</html>
